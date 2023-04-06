@@ -44,12 +44,19 @@ struct ServiceAccountCredentials : Codable {
 
 public class ServiceAccountTokenProvider : TokenProvider {
   public var token: Token?
-  
+  public var subject: String? {
+    didSet {
+      if oldValue != self.subject {
+          self.token = nil
+      }
+    }
+  }
+
   var credentials : ServiceAccountCredentials
   var scopes : [String]
   var rsaKey : RSAKey
   
-  public init?(credentialsData:Data, scopes:[String]) {
+  public init?(credentialsData:Data, scopes:[String], subject:String? = nil) {
     let decoder = JSONDecoder()
     guard let credentials = try? decoder.decode(ServiceAccountCredentials.self,
                                                 from: credentialsData)
@@ -58,6 +65,7 @@ public class ServiceAccountTokenProvider : TokenProvider {
     }
     self.credentials = credentials
     self.scopes = scopes
+    self.subject = subject
     guard let rsaKey = RSAKey(privateKey:credentials.PrivateKey)
       else {
         return nil
@@ -65,11 +73,11 @@ public class ServiceAccountTokenProvider : TokenProvider {
     self.rsaKey = rsaKey
   }
   
-  convenience public init?(credentialsURL:URL, scopes:[String]) {
+  convenience public init?(credentialsURL:URL, scopes:[String], subject:String? = nil) {
     guard let credentialsData = try? Data(contentsOf:credentialsURL, options:[]) else {
       return nil
     }
-    self.init(credentialsData:credentialsData, scopes:scopes)
+    self.init(credentialsData:credentialsData, scopes:scopes, subject:subject)
   }
   
   public func withToken(_ callback:@escaping (Token?, Error?) -> Void) throws {
@@ -83,6 +91,7 @@ public class ServiceAccountTokenProvider : TokenProvider {
     let iat = Date()
     let exp = iat.addingTimeInterval(3600)
     let jwtClaimSet = JWTClaimSet(Issuer:credentials.ClientEmail,
+                                  Subject: subject,
                                   Audience:credentials.TokenURI,
                                   Scope:  scopes.joined(separator: " "),
                                   IssuedAt: Int(iat.timeIntervalSince1970),

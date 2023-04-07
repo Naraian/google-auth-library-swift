@@ -43,43 +43,54 @@ struct ServiceAccountCredentials : Codable {
 }
 
 public class ServiceAccountTokenProvider : TokenProvider {
+  public static var tokenLifeTime: UInt = 3600
   public var token: Token?
-  public var subject: String? {
-    didSet {
-      if oldValue != self.subject {
-          self.token = nil
-      }
-    }
-  }
 
-  var credentials : ServiceAccountCredentials
-  var scopes : [String]
-  var rsaKey : RSAKey
-  
-  public init?(credentialsData:Data, scopes:[String], subject:String? = nil) {
-    let decoder = JSONDecoder()
-    guard let credentials = try? decoder.decode(ServiceAccountCredentials.self,
-                                                from: credentialsData)
-      else {
-        return nil
-    }
+  let credentials: ServiceAccountCredentials
+  let scopes: [String]
+  let subject: String?
+  let rsaKey: RSAKey
+    
+  init(credentials: ServiceAccountCredentials,
+       scopes: [String],
+       subject: String?,
+       rsaKey: RSAKey)
+  {
     self.credentials = credentials
     self.scopes = scopes
     self.subject = subject
-    guard let rsaKey = RSAKey(privateKey:credentials.PrivateKey)
-      else {
-        return nil
-    }
     self.rsaKey = rsaKey
   }
-  
-  convenience public init?(credentialsURL:URL, scopes:[String], subject:String? = nil) {
+    
+  convenience public init?(credentialsURL:URL, scopes:[String]) {
     guard let credentialsData = try? Data(contentsOf:credentialsURL, options:[]) else {
       return nil
     }
-    self.init(credentialsData:credentialsData, scopes:scopes, subject:subject)
+    self.init(credentialsData:credentialsData, scopes:scopes)
   }
-  
+    
+  convenience public init?(credentialsData: Data, scopes: [String]) {
+    let decoder = JSONDecoder()
+    guard let credentials = try? decoder.decode(ServiceAccountCredentials.self,
+                                                from: credentialsData),
+          let rsaKey = RSAKey(privateKey:credentials.PrivateKey)
+    else {
+        return nil
+    }
+
+    self.init(credentials: credentials,
+              scopes: scopes,
+              subject: nil,
+              rsaKey: rsaKey)
+  }
+        
+  public func copyWith(subject: String) -> ServiceAccountTokenProvider {
+    return ServiceAccountTokenProvider(credentials: self.credentials,
+                                       scopes: self.scopes,
+                                       subject: subject,
+                                       rsaKey: self.rsaKey)
+  }
+    
   public func withToken(_ callback:@escaping (Token?, Error?) -> Void) throws {
 
     // leave spare at least one second :)
@@ -89,7 +100,7 @@ public class ServiceAccountTokenProvider : TokenProvider {
     }
   
     let iat = Date()
-    let exp = iat.addingTimeInterval(3600)
+    let exp = iat.addingTimeInterval(TimeInterval(Self.tokenLifeTime))
     let jwtClaimSet = JWTClaimSet(Issuer:credentials.ClientEmail,
                                   Subject: subject,
                                   Audience:credentials.TokenURI,

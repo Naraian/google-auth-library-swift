@@ -51,25 +51,14 @@ public class ServiceAccountTokenProvider : TokenProvider {
   let subject: String?
   let rsaKey: RSAKey
     
-  init(credentials: ServiceAccountCredentials,
-       scopes: [String],
-       subject: String?,
-       rsaKey: RSAKey)
-  {
-    self.credentials = credentials
-    self.scopes = scopes
-    self.subject = subject
-    self.rsaKey = rsaKey
-  }
-    
-  convenience public init?(credentialsURL:URL, scopes:[String]) {
+  convenience public init?(credentialsURL: URL, scopes: [String], subject: String? = nil) {
     guard let credentialsData = try? Data(contentsOf:credentialsURL, options:[]) else {
       return nil
     }
-    self.init(credentialsData:credentialsData, scopes:scopes)
+    self.init(credentialsData:credentialsData, scopes:scopes, subject: subject)
   }
     
-  convenience public init?(credentialsData: Data, scopes: [String]) {
+  public init?(credentialsData: Data, scopes: [String], subject: String?) {
     let decoder = JSONDecoder()
     guard let credentials = try? decoder.decode(ServiceAccountCredentials.self,
                                                 from: credentialsData),
@@ -78,19 +67,12 @@ public class ServiceAccountTokenProvider : TokenProvider {
         return nil
     }
 
-    self.init(credentials: credentials,
-              scopes: scopes,
-              subject: nil,
-              rsaKey: rsaKey)
+    self.credentials = credentials
+    self.scopes = scopes
+    self.subject = subject
+    self.rsaKey = rsaKey
   }
         
-  public func copyWith(subject: String) -> ServiceAccountTokenProvider {
-    return ServiceAccountTokenProvider(credentials: self.credentials,
-                                       scopes: self.scopes,
-                                       subject: subject,
-                                       rsaKey: self.rsaKey)
-  }
-    
   public func withToken(_ callback:@escaping (Token?, Error?) -> Void) throws {
 
     // leave spare at least one second :)
